@@ -148,13 +148,40 @@
             font-size: 1.4rem;
             margin-top: 0.5rem;
         }
+        /* Carrusel: fotos más grandes sin alargar la sección
+           (se compensa achicando el ícono de cámara y los márgenes) */
+        .carousel-track.no-anim,
+        .carousel-track.no-anim * { transition: none !important; }
+        .gallery-section .camera-icon {
+            width: 4.5rem;
+            height: 4.5rem;
+            margin: 0 auto 0.75rem;
+        }
+        .gallery-section .camera-icon svg { width: 52px; height: 52px; }
+        .gallery-section .carousel-container { margin-bottom: 0.75rem; }
+        .gallery-section .carousel-item { height: 368px; }
+        /* La foto central se agranda un poco sin que se corten sus bordes */
+        .gallery-section .carousel-item { overflow: visible; }
+        @media (min-width: 769px) {
+            .gallery-section .carousel-item.is-center .framed-photo {
+                transform: scale(1.06) rotate(-0.2deg);
+            }
+        }
+        @media (max-width: 768px) {
+            .gallery-section .carousel-item { height: 440px !important; }
+            .gallery-section .carousel-item img { max-height: 440px !important; }
+        }
+        @media (max-width: 480px) {
+            .gallery-section .carousel-item { height: 388px !important; }
+            .gallery-section .carousel-item img { max-height: 388px !important; }
+        }
         /* Colores permitidos en el código de vestimenta: sin la raya roja */
         .color-dot.is-allowed::after { display: none; }
         .dresscode-note { margin-top: 1.25rem; font-style: italic; }
         .carousel-container {
             position: relative;
             width: 100%;
-            max-width: 800px;
+            max-width: 920px;
             margin: 0 auto;
         }
         .carousel-btn {
@@ -270,7 +297,7 @@
                     <div class="event-details">
                         <h4>Día</h4>
                         <p>Sábado 10 de Octubre · 2:00 p.m. a 7:00 p.m.</p>
-                        <p class="event-punctuality">La recepción sigue a la bienvenida</p>
+                        <p class="event-punctuality">Se agradece puntualidad</p>
                     </div>
                     <div class="event-details">
                         <h4>Lugar</h4>
