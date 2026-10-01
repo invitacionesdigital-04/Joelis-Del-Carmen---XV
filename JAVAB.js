@@ -263,139 +263,128 @@ function initializeCountdown() {
     setInterval(updateCountdown, 1000);
 }
 
-// Carrusel
+// Carrusel infinito: las fotos avanzan siempre en la misma dirección y,
+// al llegar a la última, siguen con la primera (en círculo) sin devolverse.
+// Para lograrlo se clonan las fotos antes y después de las originales y,
+// cuando el carrusel entra en la zona de clones, salta sin animación a la
+// foto equivalente del grupo original (el salto es invisible).
+let carouselPos = 0;
+let carouselTrack = null;
+
 function initializeCarousel() {
     const track = document.getElementById('carouselTrack');
     const nextBtn = document.getElementById('nextBtn');
     const prevBtn = document.getElementById('prevBtn');
-
     if (!track) return;
+    carouselTrack = track;
 
-    // calcular total dinámicamente
-    const items = track.querySelectorAll('.carousel-item');
-    totalSlides = items.length;
+    const originals = Array.from(track.querySelectorAll('.carousel-item'));
+    totalSlides = originals.length;
+    if (!totalSlides) return;
     const totalSlidesElement = document.getElementById('totalSlides');
     if (totalSlidesElement) totalSlidesElement.textContent = totalSlides;
 
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            currentSlide = (currentSlide + 1) % totalSlides;
-            updateCarousel();
-        });
-    }
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
-            updateCarousel();
-        });
-    }
+    // Clones: un juego completo después y otro antes de las fotos reales
+    originals.forEach(item => {
+        const clone = item.cloneNode(true);
+        clone.classList.add('is-clone');
+        clone.setAttribute('aria-hidden', 'true');
+        track.appendChild(clone);
+    });
+    originals.slice().reverse().forEach(item => {
+        const clone = item.cloneNode(true);
+        clone.classList.add('is-clone');
+        clone.setAttribute('aria-hidden', 'true');
+        track.insertBefore(clone, track.firstChild);
+    });
 
-    // Ajuste inicial para asegurar cálculo correcto tras el render
-    updateCarousel();
-    requestAnimationFrame(updateCarousel);
-    setTimeout(updateCarousel, 200);
+    carouselPos = totalSlides; // primera foto real
 
-    // Auto-play del carrusel
-    setInterval(() => {
-        nextSlide();
-    }, 2500);
+    if (nextBtn) nextBtn.addEventListener('click', () => moveCarousel(1));
+    if (prevBtn) prevBtn.addEventListener('click', () => moveCarousel(-1));
+
+    track.addEventListener('transitionend', (e) => {
+        if (e.target === track) normalizeCarousel();
+    });
+
+    renderCarousel(false);
+    requestAnimationFrame(() => renderCarousel(false));
+    setTimeout(() => renderCarousel(false), 200);
+    window.addEventListener('load', () => renderCarousel(false));
+    window.addEventListener('resize', () => renderCarousel(false));
+
+    // Auto-play del carrusel (siempre hacia adelante)
+    setInterval(() => moveCarousel(1), 2500);
 }
 
-function updateCarousel() {
-    const track = document.getElementById('carouselTrack');
-    if (track) {
-        const items = track.querySelectorAll('.carousel-item');
-        if (!items.length) return;
-        const container = track.parentElement;
+function carouselCenterOffset() {
+    const items = carouselTrack.querySelectorAll('.carousel-item');
+    const itemWidth = items[0].getBoundingClientRect().width || 1;
+    const containerWidth = carouselTrack.parentElement.getBoundingClientRect().width;
+    const visible = Math.max(1, Math.round(containerWidth / itemWidth));
+    return Math.floor(visible / 2);
+}
 
-        // Temporarily reset transform to measure actual positions
-        const previousTransform = track.style.transform;
-        track.style.transform = 'none';
+function renderCarousel(animate) {
+    if (!carouselTrack) return;
+    const items = carouselTrack.querySelectorAll('.carousel-item');
+    const target = items[carouselPos];
+    if (!target) return;
+    const translateXpx = -Math.round(target.offsetLeft);
 
-        const firstRect = items[0].getBoundingClientRect();
-        const secondRect = items[1] ? items[1].getBoundingClientRect() : null;
-        const stepWidth = Math.max(1, secondRect ? Math.round(secondRect.left - firstRect.left) : Math.round(firstRect.width));
-
-        const containerWidth = Math.round(container.getBoundingClientRect().width);
-        const visibleCount = Math.max(1, Math.floor((containerWidth + 1) / stepWidth));
-        const maxIndex = Math.max(0, totalSlides - visibleCount);
-
-        // Detecta si hay que dar la vuelta (de la última foto a la 1, o viceversa)
-        let wrapped = false;
-        if (currentSlide > maxIndex) { currentSlide = 0; wrapped = true; }
-        if (currentSlide < 0) { currentSlide = maxIndex; wrapped = true; }
-
-        const trackRect = track.getBoundingClientRect();
-        const baseLeft = Math.round(firstRect.left - trackRect.left);
-        const translateXpx = -Math.round(baseLeft + (currentSlide * stepWidth));
-
-        if (wrapped) {
-            // Al dar la vuelta, salta directo a la foto 1 sin animar el regreso
-            // (evita el efecto de "devolverse" deslizando hacia atrás por todas las fotos)
-            const prevTransition = track.style.transition;
-            track.style.transition = 'none';
-            track.style.transform = `translateX(${translateXpx}px)`;
-            void track.offsetWidth; // fuerza reflow para aplicar el salto sin animación
-            track.style.transition = prevTransition || '';
-        } else {
-            // Apply transform
-            track.style.transform = `translateX(${translateXpx}px)`;
-        }
-        // console.log('Carousel moved to slide:', { currentSlide, visibleCount, maxIndex, translateXpx, stepWidth, baseLeft });
+    if (animate) {
+        carouselTrack.style.transform = `translateX(${translateXpx}px)`;
+    } else {
+        // Salto instantáneo: sin animar el track ni el zoom de la foto central
+        carouselTrack.classList.add('no-anim');
+        carouselTrack.style.transition = 'none';
+        carouselTrack.style.transform = `translateX(${translateXpx}px)`;
+        markCenterCarouselItem();
+        void carouselTrack.offsetWidth; // fuerza reflow
+        carouselTrack.style.transition = '';
+        carouselTrack.classList.remove('no-anim');
     }
-    updateSlideCounter();
     markCenterCarouselItem();
+    updateSlideCounter();
 }
 
-function nextSlide() {
-    currentSlide++;
-    updateCarousel();
+// Si estamos en la zona de clones, saltar a la foto real equivalente
+function normalizeCarousel() {
+    if (carouselPos >= totalSlides * 2) {
+        carouselPos -= totalSlides;
+        renderCarousel(false);
+    } else if (carouselPos < totalSlides) {
+        carouselPos += totalSlides;
+        renderCarousel(false);
+    }
 }
 
-function previousSlide() {
-    currentSlide--;
-    updateCarousel();
+function moveCarousel(direction) {
+    if (!carouselTrack) return;
+    normalizeCarousel(); // por si el navegador no disparó transitionend (pestaña en segundo plano)
+    carouselPos += direction;
+    renderCarousel(true);
 }
+
+function nextSlide() { moveCarousel(1); }
+function previousSlide() { moveCarousel(-1); }
 
 function updateSlideCounter() {
     const currentSlideElement = document.getElementById('currentSlide');
-    const totalSlidesElement = document.getElementById('totalSlides');
-    if (currentSlideElement) currentSlideElement.textContent = (currentSlide + 1);
-    if (totalSlidesElement) totalSlidesElement.textContent = totalSlides;
+    if (!currentSlideElement || !carouselTrack || !totalSlides) return;
+    const centerIndex = carouselPos + carouselCenterOffset();
+    currentSlideElement.textContent = (centerIndex % totalSlides) + 1;
 }
 
-// Mark center carousel item on desktop
+// Marca la foto del centro (se agranda en PC)
 function markCenterCarouselItem() {
-    const track = document.getElementById('carouselTrack');
-    if (!track) return;
-    const items = Array.from(track.querySelectorAll('.carousel-item'));
+    if (!carouselTrack) return;
+    const items = Array.from(carouselTrack.querySelectorAll('.carousel-item'));
     if (!items.length) return;
     items.forEach(it => it.classList.remove('is-center'));
-
-    const firstItem = items[0];
-    const container = track.parentElement;
-    const itemWidth = firstItem.getBoundingClientRect().width;
-    const containerWidth = container.getBoundingClientRect().width;
-    const visibleCount = Math.max(1, Math.floor(containerWidth / itemWidth));
-
-    const centerIndex = (currentSlide + Math.floor(visibleCount / 2)) % items.length;
-    items[centerIndex].classList.add('is-center');
+    const center = items[carouselPos + carouselCenterOffset()];
+    if (center) center.classList.add('is-center');
 }
-
-// Hook into carousel updates
-const _origUpdateCarousel = typeof updateCarousel === 'function' ? updateCarousel : null;
-if (_origUpdateCarousel) {
-    window.updateCarousel = function() {
-        _origUpdateCarousel();
-        markCenterCarouselItem();
-    };
-}
-
-window.addEventListener('resize', markCenterCarouselItem);
-
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(markCenterCarouselItem, 200);
-});
 
 // Funciones de los botones
 function openLocation(location) {
